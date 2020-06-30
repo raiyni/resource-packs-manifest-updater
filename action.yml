@@ -1,13 +1,8 @@
-name: 'Wait'
-description: 'Wait a designated number of milliseconds'
-inputs:
-  milliseconds:  # id of input
-    description: 'number of milliseconds to wait'
-    required: true
-    default: '1000'
-outputs:
-  time: # output will be available to future steps 
-    description: 'The message to output'
+name: 'Manifest updater'
+description: 'Update the manifest that is used to identify packs'
 runs:
   using: 'node12'
-  main: 'dist/index.js'
+  main: 'index.js'
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
