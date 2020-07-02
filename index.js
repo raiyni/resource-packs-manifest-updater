@@ -9,7 +9,7 @@ try {
     BRANCH = "https://github.com/" + REPO + "/tree/";
     PROPERTIES = "pack.properties";
     ICON = "icon.png";
-    MAIN_BRANCH = "master";
+    MAIN_BRANCH = "github-actions";
     MANIFEST = "manifest.js";
     TOKEN = process.env.ACCESS_TOKEN;
 
