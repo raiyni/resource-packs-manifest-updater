@@ -17,7 +17,7 @@ try {
     let combinedArray = [];
 
     const repo = client.repo(REPO);
-    repo.branches(function (err, data, headers) {
+    repo.branches({per_page: 100}, function (err, data, headers) {
         let combinedPromise = [];
         for (let branch of data) {
             if (branch.name.startsWith("pack-")) {
