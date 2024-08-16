@@ -1,7 +1,7 @@
 // const https = require('https');
 require('dotenv').config()
 
-const properties = require('node-properties-parser')
+const properties = require('properties-parser')
 
 const github = require('@actions/github')
 const core = require('@actions/core')
