@@ -1,7 +1,7 @@
 name: 'Manifest updater'
 description: 'Update the manifest that is used to identify packs'
 runs:
-  using: 'node12'
+  using: 'node20'
   main: 'index.js'
 branding:
   icon: 'upload-cloud'
