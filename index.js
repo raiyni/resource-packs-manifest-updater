@@ -1,114 +1,121 @@
-const github = require('octonode');
-const https = require('https');
-const properties = require('node-properties-parser');
-const core = require('@actions/core');
+// const https = require('https');
+require('dotenv').config()
 
-try {
-    REPO = "melkypie/resource-packs"
-    RAW_GITHUB = "https://raw.githubusercontent.com/" + REPO;
-    BRANCH = "https://github.com/" + REPO + "/tree/";
-    PROPERTIES = "pack.properties";
-    ICON = "icon.png";
-    MAIN_BRANCH = "github-actions";
-    MANIFEST = "manifest.js";
-    TOKEN = process.env.ACCESS_TOKEN;
+const properties = require('node-properties-parser')
 
-    const client = github.client(TOKEN);
-    let combinedArray = [];
+const github = require('@actions/github')
+const core = require('@actions/core')
 
-    const repo = client.repo(REPO);
-    repo.branches({per_page: 100}, function (err, data, headers) {
-        let combinedPromise = [];
-        for (let branch of data) {
-            if (branch.name.startsWith("pack-")) {
-                let currentBranch = branch;
-                combinedPromise.push(new Promise((resolve, reject) => {
-                    getPackProperties(resolve, reject, currentBranch)
-                }));
-            }
-        }
+const REPO = 'melkypie/resource-packs'
+const RAW_GITHUB = 'https://raw.githubusercontent.com/' + REPO
+const BRANCH = 'https://github.com/' + REPO + '/tree/'
+const PROPERTIES = 'pack.properties'
+const ICON = 'icon.png'
+const MAIN_BRANCH = 'github-actions'
+const MANIFEST = 'manifest.js'
+const TOKEN = process.env.ACCESS_TOKEN
 
-        Promise.all(combinedPromise).then(() => {
-            checkIcons(combinedArray);
-        });
-    });
+const octokit = github.getOctokit(TOKEN)
 
-
-    function getPackProperties(resolve, reject, branch) {
-        let internalName = branch.name;
-        let commit = branch.commit.sha;
-        https.get(RAW_GITHUB + "/" + commit + "/" + PROPERTIES, (resp) => {
-            let data = '';
-            resp.on('data', (chunk) => {
-                data += chunk;
-            });
-
-            resp.on('end', () => {
-                let props = checkProperties(data);
-                if (props != null) {
-                    props["internalName"] = internalName;
-                    let tags = props["tags"].split(',');
-                    if (tags[0] !== "") {
-                        props["tags"] = tags;
-                    } else {
-                        delete props["tags"];
-                    }
-                    props["commit"] = commit;
-                    props["repo"] = BRANCH + internalName;
-                    combinedArray.push(props);
-                }
-                resolve(props);
-            });
-        }).on("error", (err) => {
-            throw "Encountered an error: " + err.message;
-        });
-    }
-
-    function checkProperties(data) {
-        if (data.startsWith("displayName")) {
-            return properties.parse(data);
-        }
-        return null;
-    }
-
-    function checkIcons(combinedProps) {
-        let combinedPromise = [];
-        let combinedFinalProps = [];
-        for (let props of combinedProps) {
-            combinedPromise.push(new Promise((resolve, reject) => {
-                https.get(RAW_GITHUB + "/" + props["commit"] + "/" + ICON, (resp) => {
-                    props["hasIcon"] = resp.statusCode === 200;
-                    combinedFinalProps.push(props);
-                    resolve();
-                }).on("error", (err) => {
-                    throw "Encountered an error: " + err.message;
-                });
-            }));
-        }
-
-        Promise.all(combinedPromise).then(() => {
-            combineAndCommit(combinedFinalProps);
-        })
-    }
-
-    function combineAndCommit(combined) {
-        let json = JSON.stringify(combined);
-        console.log(JSON.stringify(combined, null, 2));
-        let dateNow = new Date();
-        repo.contents(MANIFEST, MAIN_BRANCH, (err, data, headers) => {
-            if (err == null) {
-                repo.updateContents(MANIFEST, "Update " + MANIFEST + " " + dateNow.toISOString(), json, data.sha, MAIN_BRANCH, (err, data, headers) => {
-                    if (err == null) {
-                        console.log("Updated " + dateNow.toISOString());
-                    } else {
-                        throw "ERROR when updating contents: " + err;
-                    }
-                });
-            } else {
-                throw "Failed to find the file " + err;
-            }
-        });
-    }
-} catch (error) {
-    core.setFailed(error.message);
+function parseProperties(data) {
+	if (data.startsWith('displayName')) {
+		return properties.parse(data)
+	}
+	return null
 }
+
+async function getPackProperties(branch) {
+	let internalName = branch.name
+	let commit = branch.commit.sha
+
+	const response = await fetch(RAW_GITHUB + '/' + commit + '/' + PROPERTIES)
+	if (!response.ok || response.status != 200) {
+		if (response.status == 404) {
+			console.log(internalName, commit, PROPERTIES, 'is missing')
+			return Promise.resolve(null)
+		}
+
+		return Promise.reject(
+			JSON.stringify({
+				name: branch.name,
+				commit: commit,
+				statusText: response.statusText,
+				file: PROPERTIES
+			})
+		)
+	}
+
+	const data = await response.text()
+	const props = parseProperties(data)
+	if (props != null) {
+		props['internalName'] = internalName
+		let tags = props['tags'].split(',')
+		if (tags[0] !== '') {
+			props['tags'] = tags
+		} else {
+			delete props['tags']
+		}
+		props['commit'] = commit
+		props['repo'] = BRANCH + internalName
+
+        const iconResponse = await fetch(RAW_GITHUB + '/' + commit + '/' + ICON)
+        props.hasIcon = iconResponse.status == 200
+	} else {
+		console.log(internalName, commit, PROPERTIES, 'empty or invalid')
+	}
+
+	return Promise.resolve(props)
+}
+
+async function parsePackProperties(packs) {
+	return Promise.all(
+		packs.map(async (branch) => {
+			return getPackProperties(branch)
+		})
+	)
+}
+
+async function generateManifest(properties) {
+    let json = JSON.stringify(properties)
+	console.log(JSON.stringify(properties, null, 2))
+	let now = new Date()
+
+    const result = await octokit.rest.repos.getContent({
+        owner: 'melkypie',
+		repo: 'resource-packs',
+        path: MANIFEST,
+        ref: MAIN_BRANCH
+    })
+
+    await octokit.rest.repos.createOrUpdateFileContents({
+        owner: 'melkypie',
+		repo: 'resource-packs',
+        path: MANIFEST,
+        branch: MAIN_BRANCH,
+        message: `Update ${MANIFEST} ${now.toISOString()}`,
+        content: Buffer.from(json).toString('base64'),
+        sha: result.data.sha
+    })
+}
+
+async function main() {
+	try {
+		const branches = await octokit.paginate(octokit.rest.repos.listBranches, {
+			owner: 'melkypie',
+			repo: 'resource-packs',
+			per_page: 100
+		})
+
+		const packs = branches.filter((f) => f.name.startsWith('pack-'))
+		const packProperties = await parsePackProperties(packs)
+        await generateManifest(packProperties)
+
+		return Promise.resolve(true)
+	} catch (error) {
+		core.setFailed(error)
+	}
+}
+
+console.log('running node', process.version)
+
+main()
