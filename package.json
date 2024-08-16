@@ -11,8 +11,8 @@
   "bugs": {},
   "homepage": "https://github.com/actions/javascript-action#readme",
   "dependencies": {
+    "@actions/core": "latest",
     "node-properties-parser": "0.0.2",
-    "octonode": "^0.9.5",
-    "@actions/core": "latest"
+    "octonode": "^0.10.2"
   }
 }
