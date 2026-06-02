@@ -113,7 +113,7 @@ async function main() {
 
 		const packs = branches.filter((f) => f.name.startsWith('pack-'))
 		const packProperties = await parsePackProperties(packs)
-		const filteredProperties = packProperties.filter((p) => p !== null)
+		const filteredProperties = packProperties.filter((p) => p !== null && p.listed !== 'false')
 		await generateManifest(filteredProperties)
 
 		return Promise.resolve(true)
